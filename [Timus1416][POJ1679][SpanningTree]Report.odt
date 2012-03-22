@@ -1,0 +1,125 @@
+﻿题目
+  略
+题目大意
+	计算最小生成树和最小生成树。POJ1679需要比较其是否一样。
+算法分析
+	比较常见的是用kruskal算法计算最小生成树。然后再分别去掉最小生成树上的每一条边，再加入一条除了去掉了的那一条边之外的使得分开的两部分相连的最小边。分别去掉这n-1条边之后取最小值即可。判断两点是否属于同一部分重新算一遍kruskal的并查集即可。这种方法对于稀疏图来说很有效，时间复杂度大概O( M * ( N - 1 ) + N - 1 * logN + M*logM )去边的时间复杂度+排序的时间复杂度+合并的时间复杂度)
+	不过这道题我为了试prim的方法用了计算一个环中的第二大的边的方法，结果费了一个下午的时间。我没有看到有怎么介绍具体实现方法的所以这里写一下。
+	首先设w[ i , j ]是从i到j的一条边，mat[ i , j ]是生成树上从i到j路径的最大边,pre[ i ]是点i在加入生成树之前生成树内连接的边权最短的点。
+	因为结点加入的先后次序不同，所以我们最后会得到一棵有根树。	
+	Prim算法在计算的时候每次会往生成树中增加一个点，我们记录这个点为k,对于k的所有祖先j，如果有mat[ j , k ] < w[ pre[ k ] , k ]则将
+	mat[ j , k ]更新为w[ pre[ k ] , k ]。否则则将其变成mat[ j , pre[ k ] ]。这个过程类似于一个简单的区间类型的动态规划就是说我们对于j到k这段路径，选取其[ j , pre[ k ] ]这一段的最大值或者是新加入这段路径的w[ pre[ k ] , k ]这条边。由于这个递推过程在prim过程中，所以递推的顺序和节点加入的顺序是一致的。最终我们会得到1到任意结点k以及k的任意祖先到k的路径上的最大边。
+	比如说我们完成这个步骤之后会得到这样一棵生成树:
+	1->2->3->4
+     |
+     V
+     5->6->7
+	我们知道了[1,7]和[1,4]这两个区间内所有点之间的最大边，但是对于[4,7]这样祖先不同的路径这里还没有做处理，所以完成这个步骤之后，还需要对前驱(祖先)结点不同(互不包含)的节点进行处理，假如i,j是两个祖先不同的节点，那么就有：
+	mat[ i , j ] = max(mat[ LCA(i,j) , i ] , mat[ LCA(i,j) , j ]);LCA(i,j)是i,j的最低公共祖先，这个式子实际上就很显然了。
+	最后对于每个不在生成树中的边进行添加和删除操作，计算其最小值就可以了，为了方便起见在代码当中我将树中加入的边在每次循环结束后都赋为0了。设MST的权值和为cnt,那么次小生成树的权值和则是 cnt + min( w[ i , j ] - mat[ i , j ] ),其中w[ i , j]是不在MST中的边。
+	实际运行过程中没觉得有多快，可能稀疏图和稠密图的数据相抵消了吧。不知道把计算LCA的过程转化为RMQ是不是要快一些。
+解题过程
+	数据会有权值为0的情况，+1即可解决，最后结果减n-1即可，我觉得这是这题最有意思的地方了。
+代码
+//timus 1416 AC
+#include<iostream>
+#include<cstring>
+#define INF 2141483647
+#define MAXN 502
+using namespace std;
+
+int n , m ;
+int cnt , scnt ;
+int w[ MAXN ][ MAXN ] , mark[ MAXN ];
+int mat[ MAXN ][ MAXN ];
+int pre[ MAXN ];
+
+void prim()
+{
+  int i , j , k , v ;
+  int  mint ;
+  cnt = 0 ;
+  for( i = 1 ; i <= n ; ++ i )
+    { mark[ i ] = w[ 1 ][ i ] > 0 ? w[ 1 ][ i ] : INF ; pre[ i ] = 1 ;}
+  
+  mark[ 1 ] = -1 ; pre[ 1 ] = 0;
+	//计算最小生成树
+  for( i = 1 ; i < n ; ++ i )
+    {
+      mint = INF; k = 0 ;
+      for( j = 1 ; j <= n ; ++ j )
+	if( mark[ j ] > 0  and mint > mark[ j ])
+	  { k = j , mint = mark[ j ] ; }
+      
+      cnt += mint; 
+      mark[ k ] = -1;
+     
+      //计算统一祖先路径上的最大边
+      j = k ;
+      while( pre[ j ] )
+	{
+	  mat[ pre[ j ] ][ k ] = mat[ pre[ j ] ][ k ] > w[ pre[ k ] ][ k ] ? mat[ pre[ j ]][ k ] : w[ pre[ k ] ][ k ];
+	  
+	  if( mat[ pre[ j ] ][ k ] < mat[ pre[ j ] ][ pre[ k ] ]) 
+	    mat[ pre[ j ] ][ k ] = mat[ pre[ j ] ][ pre[ k ] ];
+	  mat[ k ][ pre[ j ] ] = mat[ pre[ j ] ][ k ];
+	  
+	  j = pre[ j ];
+	}
+      //将生成树中的边清零，方便后面的判断
+      w[ pre[ k ] ][ k ] = w[ k ][ pre[ k ] ] = 0 ;
+
+
+      for( j = 1 ; j <= n ; ++ j )
+	if(mark[ j ] not_eq -1 and w[ k ][ j ] > 0  and mark[ j ] > w[ k ][ j ] )
+	  mark[ j ] = w[ k ][ j ] , pre[ j ] = k;      
+    }
+
+	//计算不同祖先点之间的最大边
+  for( i = 2 ; i <= n ; ++ i )
+    for( j = i + 1  ; j <= n ; ++ j )
+      {
+	if( mat[ i ][ j ] == 0 )
+	  {
+	    for( k = i  ; k > 0 ; k = pre[ k ] )
+	      for( v = j  ; v > 0 ; v = pre[ v ] )
+		if( k == v )//计算两点的LCA
+		  {
+		    mat[ i ][ j ] = mat[ i ][ k ] > mat[ j ][ v ] ? mat[ i ][ k ] : mat[ j ][ v ];
+		    goto end;
+		  }
+	  }
+      end:;
+      }
+	//计算次小生成树的边权和
+  scnt = INF ;
+  for( i = 1 ; i <= n ; ++ i )
+    for( j = i + 1 ; j <= n ; ++ j )
+      if( w[ i ][ j ]  and scnt > cnt - mat[ i ][ j ] + w[ i ][ j ] )//这里注意是不在生成树中的边
+	scnt = cnt - mat[ i ][ j ] + w[ i ][ j ];
+	  
+  return ;
+}
+
+int main()
+{
+  int u , v ;
+  int  wi ;
+  cin>>n>>m;
+      for(int i = 1 ; i <= m ; ++ i )
+	{
+	  cin>>u>>v>>wi;
+	  w[ v ][ u ] = w[ u ][ v ] = wi + 1 ;//处理边权为0的情况
+	}
+
+      prim();
+      if( n - 1 == m ) scnt = -1;
+      else scnt = scnt - n + 1 ;
+      cout<<"Cost: "<<cnt - n + 1<<"\nCost: "<<scnt<<"\n";
+      /*
+      memset( w , 0 , sizeof( w ));
+      memset( mat , 0 , sizeof( mat ));
+      memset( pre , 0 , sizeof( pre ));
+      */
+  return 0 ;
+}
